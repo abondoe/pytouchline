@@ -9,6 +9,7 @@ class PyTouchline(object):
 
 	def __init__(self, id=0):
 		self._id = id
+		self._temp_scale = 100
 		self._header = {"Content-Type": "text/xml"}
 		self._read_path = "/cgi-bin/ILRReadValues.cgi"
 		self._write_path = "/cgi-bin/writeVal.cgi"
@@ -42,24 +43,24 @@ class PyTouchline(object):
 		PyTouchline._ip_address = ip_address
 		number_of_devices_items = []
 		number_of_devices_items.append("<i><n>totalNumberOfDevices</n></i>")
-		request = self.get_PyTouchline_request(number_of_devices_items)
-		response = self.request_and_receive_xml(request)
-		return self.parse_number_of_devices(response)
+		request = self._get_pytouchline_request(number_of_devices_items)
+		response = self._request_and_receive_xml(request)
+		return self._parse_number_of_devices(response)
 
 	def get_status(self):
 		status_items = []
 		status_items.append("<i><n>R0.SystemStatus</n></i>")
-		request = self.get_PyTouchline_request(status_items)
-		response = self.request_and_receive_xml(request)
-		return self.parse_number_of_devices(response)
+		request = self._get_pytouchline_request(status_items)
+		response = self._request_and_receive_xml(request)
+		return self._parse_number_of_devices(response)
 
 	def update(self):
-		device_items = self.get_PyTouchline_device_item(self._id)
-		request = self.get_PyTouchline_request(device_items)
-		response = self.request_and_receive_xml(request)
-		return self.parse_device(response)
+		device_items = self._get_PyTouchline_device_item(self._id)
+		request = self._get_pytouchline_request(device_items)
+		response = self._request_and_receive_xml(request)
+		return self._parse_device(response)
 
-	def parse_device(self, response):
+	def _parse_device(self, response):
 		self.devices = []
 		item_list = response.find('item_list')
 		for item in item_list.iterfind("i"):
@@ -74,7 +75,7 @@ class PyTouchline(object):
 						device_list[list_iterator + 1].text)
 				list_iterator += 2
 
-	def get_PyTouchline_request(self, items):
+	def _get_pytouchline_request(self, items):
 		request = "<body>"
 		request += "<version>1.0</version>"
 		request += "<client>IMaster6_02_00</client>"
@@ -88,7 +89,7 @@ class PyTouchline(object):
 		request += "</body>"
 		return request
 
-	def request_and_receive_xml(self, req_key):
+	def _request_and_receive_xml(self, req_key):
 		try:
 			h = httplib2.Http(".cache")
 			(resp, content) = h.request(
@@ -105,12 +106,12 @@ class PyTouchline(object):
 		else:
 			return xml(content)
 
-	def parse_number_of_devices(self, response):
+	def _parse_number_of_devices(self, response):
 		item_list = response.find('item_list')
 		item = item_list.find('i')
 		return item.find('v').text
 
-	def get_PyTouchline_device_item(self, id):
+	def _get_PyTouchline_device_item(self, id):
 		items = []
 		parameters = ""
 		for parameter in self._xml_element_list:
@@ -129,13 +130,13 @@ class PyTouchline(object):
 
 	def get_current_temperature(self):
 		if "Temperature" in self._parameter:
-			return self._parameter["Temperature"]
+			return int(self._parameter["Temperature"]) / self._temp_scale
 		else:
 			return None
 
 	def get_target_temperature(self):
 		if "Setpoint" in self._parameter:
-			return self._parameter["Setpoint"]
+			return int(self._parameter["Setpoint"]) / self._temp_scale
 		else:
 			return None
 
