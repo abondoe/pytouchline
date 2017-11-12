@@ -1,12 +1,14 @@
 #!/usr/bin/python3
 
-from touchline import Touchline
+from pytouchline import PyTouchline
 
-touchline = Touchline()
+py_touchline = PyTouchline()
 
-numberOfDevices = int(touchline.get_number_of_devices("http://192.168.1.10"))
-device1 = Touchline(id=1)
-device1.update()
-print(device1.get_name())
-print(device1.get_current_temperature())
-print(device1.get_target_temperature())
+numberOfDevices = int(py_touchline.get_number_of_devices("http://192.168.1.10"))
+devices = []
+for x in range(0, numberOfDevices):
+	devices.append(PyTouchline(id=x))
+	devices[x].update()
+	print(devices[x].get_name())
+	print(devices[x].get_current_temperature())
+	print(devices[x].get_target_temperature())

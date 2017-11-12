@@ -4,7 +4,7 @@ from xml.etree.ElementTree import XML as xml
 __author__ = 'abondoe'
 
 
-class Touchline(object):
+class PyTouchline(object):
 	_ip_address = ""
 
 	def __init__(self, id=0):
@@ -39,23 +39,23 @@ class Touchline(object):
 					  type=Parameter.G))
 
 	def get_number_of_devices(self, ip_address):
-		Touchline._ip_address = ip_address
+		PyTouchline._ip_address = ip_address
 		number_of_devices_items = []
 		number_of_devices_items.append("<i><n>totalNumberOfDevices</n></i>")
-		request = self.get_touchline_request(number_of_devices_items)
+		request = self.get_PyTouchline_request(number_of_devices_items)
 		response = self.request_and_receive_xml(request)
 		return self.parse_number_of_devices(response)
 
 	def get_status(self):
 		status_items = []
 		status_items.append("<i><n>R0.SystemStatus</n></i>")
-		request = self.get_touchline_request(status_items)
+		request = self.get_PyTouchline_request(status_items)
 		response = self.request_and_receive_xml(request)
 		return self.parse_number_of_devices(response)
 
 	def update(self):
-		device_items = self.get_touchline_device_item(self._id)
-		request = self.get_touchline_request(device_items)
+		device_items = self.get_PyTouchline_device_item(self._id)
+		request = self.get_PyTouchline_request(device_items)
 		response = self.request_and_receive_xml(request)
 		return self.parse_device(response)
 
@@ -74,7 +74,7 @@ class Touchline(object):
 						device_list[list_iterator + 1].text)
 				list_iterator += 2
 
-	def get_touchline_request(self, items):
+	def get_PyTouchline_request(self, items):
 		request = "<body>"
 		request += "<version>1.0</version>"
 		request += "<client>IMaster6_02_00</client>"
@@ -92,13 +92,13 @@ class Touchline(object):
 		try:
 			h = httplib2.Http(".cache")
 			(resp, content) = h.request(
-				uri=Touchline._ip_address + self._read_path,
+				uri=PyTouchline._ip_address + self._read_path,
 				method="POST",
 				body=req_key,
 				headers=self._header
 			)
 		except httplib2.ServerNotFoundError:
-			print("Touchline not found")
+			print("PyTouchline not found")
 
 		if resp.reason != "OK":
 			exit("Network error")
@@ -110,7 +110,7 @@ class Touchline(object):
 		item = item_list.find('i')
 		return item.find('v').text
 
-	def get_touchline_device_item(self, id):
+	def get_PyTouchline_device_item(self, id):
 		items = []
 		parameters = ""
 		for parameter in self._xml_element_list:

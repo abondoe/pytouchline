@@ -4,12 +4,12 @@ A simple helper library for controlling a Roth Touchline heat pump controller
 
 ```py
 
-from touchline import Touchline
+from pytouchline import PyTouchline
 
-touchline = Touchline()
+py_touchline = PyTouchline()
 
-numberOfDevices = int(touchline.get_number_of_devices("http://192.168.1.10"))
-device1 = Touchline(id=1)
+numberOfDevices = int(py_touchline.get_number_of_devices("http://192.168.1.10"))
+device1 = PyTouchline(id=1)
 device1.update()
 print(device1.get_name())
 print(device1.get_current_temperature())
