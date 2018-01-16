@@ -94,7 +94,7 @@ class PyTouchline(object):
 
 	def write_parameter(self, parameter, value):
 		try:
-			h = httplib2.Http(".cache")
+			h = httplib2.Http()
 			(resp, content) = h.request(
 				uri=PyTouchline._ip_address +
 					self._write_path + "?" +
@@ -112,7 +112,7 @@ class PyTouchline(object):
 
 	def _request_and_receive_xml(self, req_key):
 		try:
-			h = httplib2.Http(".cache")
+			h = httplib2.Http()
 			(resp, content) = h.request(
 				uri=PyTouchline._ip_address + self._read_path,
 				method="POST",
