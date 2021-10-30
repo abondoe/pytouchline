@@ -1,5 +1,6 @@
 import httplib2
-from xml.etree.ElementTree import XML as xml
+import cchardet as chardet
+import xml.etree.ElementTree as ET
 
 __author__ = 'abondoe'
 
@@ -125,7 +126,8 @@ class PyTouchline(object):
 		if resp.reason != "OK":
 			exit("Network error")
 		else:
-			return xml(content)
+			enc = chardet.detect(content)['encoding']
+			return ET.XML(content, parser=ET.XMLParser(encoding=enc))
 
 	def _parse_number_of_devices(self, response):
 		item_list = response.find('item_list')
