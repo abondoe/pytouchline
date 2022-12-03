@@ -48,6 +48,13 @@ class PyTouchline(object):
 		response = self._request_and_receive_xml(request)
 		return self._parse_number_of_devices(response)
 
+	def get_hostname(self):
+		hostname_items = []
+		hostname_items.append("<i><n>hw.HostName</n></i>")
+		request = self._get_touchline_request(hostname_items)
+		response = self._request_and_receive_xml(request)
+		return self._parse_number_of_devices(response)
+
 	def get_status(self):
 		status_items = []
 		status_items.append("<i><n>R0.SystemStatus</n></i>")
