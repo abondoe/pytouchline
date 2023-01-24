@@ -2,7 +2,7 @@ import httplib2
 import cchardet as chardet
 import xml.etree.ElementTree as ET
 
-__author__ = 'abondoe'
+__author__ = 'pilehave'
 
 
 class PyTouchline(object):
