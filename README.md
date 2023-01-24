@@ -4,7 +4,7 @@ A simple helper library for controlling a Roth Touchline heat pump controller
 
 ```py
 
-from pytouchline import PyTouchline
+from pytouchlineplus import PyTouchline
 
 py_touchline = PyTouchline()
 
