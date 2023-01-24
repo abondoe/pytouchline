@@ -1,14 +1,14 @@
 from distutils.core import setup
 setup(
-  name = 'pytouchline',
-  packages = ['pytouchline'],
-  version = '0.7',
+  name = 'pytouchlineplus',
+  packages = ['pytouchlineplus'],
+  version = '0.8',
   description = 'A Roth Touchline interface library',
-  author = 'Aksel Bondoe',
-  author_email = 'aksel.bondoe@gmail.com',
+  author = 'Mikkel Pilehave Jensen',
+  author_email = 'pilehave@gmail.com',
   license='MIT',
-  url = 'https://github.com/abondoe/pytouchline',
-  download_url = 'https://github.com/abondoe/pytouchline/archive/0.7.tar.gz',
+  url = 'https://github.com/pilehave/pytouchlineplus',
+  download_url = 'https://github.com/pilehave/pytouchlineplus/archive/0.8.tar.gz',
   keywords = ['Roth', 'Touchline', 'Home Assistant', 'hassio', "Heat pump"],
   classifiers = [
 	'Development Status :: 3 - Alpha',
