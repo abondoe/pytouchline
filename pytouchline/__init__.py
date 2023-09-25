@@ -2,7 +2,7 @@ import httplib2
 import cchardet as chardet
 import xml.etree.ElementTree as ET
 
-__author__ = 'abondoe'
+__author__ = 'pilehave'
 
 
 class PyTouchline(object):
@@ -45,6 +45,13 @@ class PyTouchline(object):
 		number_of_devices_items = []
 		number_of_devices_items.append("<i><n>totalNumberOfDevices</n></i>")
 		request = self._get_touchline_request(number_of_devices_items)
+		response = self._request_and_receive_xml(request)
+		return self._parse_number_of_devices(response)
+
+	def get_hostname(self):
+		hostname_items = []
+		hostname_items.append("<i><n>hw.HostName</n></i>")
+		request = self._get_touchline_request(hostname_items)
 		response = self._request_and_receive_xml(request)
 		return self._parse_number_of_devices(response)
 
