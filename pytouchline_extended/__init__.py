@@ -290,11 +290,26 @@ class PyTouchline(object):
 		items.append("<i>" + parameters + "</i>")
 		return items
 
-	def get_name(self) -> str | None:
-		if "Name" in self._parameter:
-			return self._parameter["Name"]
-		else:
+	def _get_int_parameter(self, key: str) -> int | None:
+		value = self._parameter.get(key)
+		if value in (None, "None", "NA", ""):
 			return None
+		try:
+			return int(value)
+		except ValueError as e:
+			raise TouchlineResponseError(
+				f"Invalid integer value for {key} on device {self._id}"
+			) from e
+
+	def _get_scaled_temperature(self, key: str) -> float | None:
+		raw = self._get_int_parameter(key)
+		return None if raw is None else raw / self._temp_scale
+
+	def get_name(self) -> str | None:
+		value = self._parameter.get("Name")
+		if value in (None, "None", "NA"):
+			return None
+		return value
 
 	async def set_name_async(self, value: str) -> bool:
 		return (await self.write_parameter_async("name",
@@ -304,16 +319,10 @@ class PyTouchline(object):
 		return asyncio.run(self.set_name_async(value))
 
 	def get_current_temperature(self) -> float | None:
-		if "Temperature" in self._parameter:
-			return int(self._parameter["Temperature"]) / self._temp_scale
-		else:
-			return None
+		return self._get_scaled_temperature("Temperature")
 
 	def get_target_temperature(self) -> float | None:
-		if "Setpoint" in self._parameter:
-			return int(self._parameter["Setpoint"]) / self._temp_scale
-		else:
-			return None
+		return self._get_scaled_temperature("Setpoint")
 
 	async def set_target_temperature_async(self, value: float) -> bool:
 		return (await self.write_parameter_async("SollTemp",
@@ -325,10 +334,7 @@ class PyTouchline(object):
 		return asyncio.run(self.set_target_temperature_async(value))
 
 	def get_target_temperature_high(self) -> float | None:
-		if "Setpoint max" in self._parameter:
-			return int(self._parameter["Setpoint max"]) / self._temp_scale
-		else:
-			return None
+		return self._get_scaled_temperature("Setpoint max")
 
 	async def set_target_temperature_high_async(self, value: float) -> bool:
 		return (await self.write_parameter_async("SollTempMaxVal",
@@ -340,10 +346,7 @@ class PyTouchline(object):
 		return asyncio.run(self.set_target_temperature_high_async(value))
 
 	def get_target_temperature_low(self) -> float | None:
-		if "Setpoint min" in self._parameter:
-			return int(self._parameter["Setpoint min"]) / self._temp_scale
-		else:
-			return None
+		return self._get_scaled_temperature("Setpoint min")
 
 	async def set_target_temperature_low_async(self, value: float) -> bool:
 		return (await self.write_parameter_async("SollTempMinVal",
@@ -355,10 +358,7 @@ class PyTouchline(object):
 		return asyncio.run(self.set_target_temperature_low_async(value))
 
 	def get_week_program(self) -> int | None:
-		if "Week program" in self._parameter:
-			return int(self._parameter["Week program"])
-		else:
-			return None
+		return self._get_int_parameter("Week program")
 
 	async def set_week_program_async(self, value: int) -> bool:
 		return (await self.write_parameter_async("WeekProg",
@@ -368,10 +368,7 @@ class PyTouchline(object):
 		return asyncio.run(self.set_week_program_async(value))
 
 	def get_operation_mode(self) -> int | None:
-		if "Operation mode" in self._parameter:
-			return int(self._parameter["Operation mode"])
-		else:
-			return None
+		return self._get_int_parameter("Operation mode")
 
 	async def set_operation_mode_async(self, value: int) -> bool:
 		return (await self.write_parameter_async("OPMode",
@@ -381,16 +378,10 @@ class PyTouchline(object):
 		return asyncio.run(self.set_operation_mode_async(value))
 
 	def get_device_id(self) -> int | None:
-		if "Device ID" in self._parameter:
-			return int(self._parameter["Device ID"])
-		else:
-			return None
+		return self._get_int_parameter("Device ID")
 
 	def get_controller_id(self) -> int | None:
-		if "Controller ID" in self._parameter:
-			return int(self._parameter["Controller ID"])
-		else:
-			return None
+		return self._get_int_parameter("Controller ID")
 
 class Parameter(object):
 	CD = 0

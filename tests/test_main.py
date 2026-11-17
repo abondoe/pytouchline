@@ -557,3 +557,60 @@ def test_py_typed_marker_exists():
     py_typed = Path(pytouchline_extended.__file__).resolve().parent / "py.typed"
     assert py_typed.is_file()
 
+
+def test_parse_device_empty_xml_values_return_none():
+    """Test that empty <v/> tags ('None') and 'NA' placeholders return None from getters"""
+    touchline = PyTouchline(id=3, url="http://192.168.1.254")
+    xml_response = ET.fromstring("""
+        <body>
+            <item_list>
+                <i>
+                    <n>G3.name</n>
+                    <v>wineroom</v>
+                    <n>CD.upass</n>
+                    <v>password</v>
+                    <n>G3.SollTempMaxVal</n>
+                    <v/>
+                    <n>G3.SollTempMinVal</n>
+                    <v></v>
+                    <n>G3.WeekProg</n>
+                    <v/>
+                    <n>G3.OPMode</n>
+                    <v>0</v>
+                    <n>G3.SollTemp</n>
+                    <v>1850</v>
+                    <n>G3.RaumTemp</n>
+                    <v>1839</v>
+                    <n>G3.kurzID</n>
+                    <v>4</v>
+                    <n>G3.ownerKurzID</n>
+                    <v>109</v>
+                </i>
+            </item_list>
+        </body>
+    """)
+
+    touchline._parse_device(xml_response)
+    assert touchline.get_name() == "wineroom"
+    assert touchline.get_week_program() is None
+    assert touchline.get_target_temperature_high() is None
+    assert touchline.get_target_temperature_low() is None
+    assert touchline.get_operation_mode() == 0
+    assert touchline.get_target_temperature() == 18.5
+    assert touchline.get_current_temperature() == 18.39
+
+    touchline._parameter["Name"] = "NA"
+    touchline._parameter["Temperature"] = "NA"
+    assert touchline.get_name() is None
+    assert touchline.get_current_temperature() is None
+
+
+def test_invalid_integer_parameter_raises_response_error():
+    """Test that corrupted non-numeric values raise TouchlineResponseError"""
+    touchline = PyTouchline(id=3, url="http://192.168.1.254")
+    touchline._parameter["Week program"] = "corrupted"
+
+    with pytest.raises(TouchlineResponseError, match="Invalid integer value for Week program on device 3"):
+        touchline.get_week_program()
+
+
