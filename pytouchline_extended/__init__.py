@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import xml.etree.ElementTree as ET
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import cchardet as chardet
 import httpx
@@ -11,6 +13,32 @@ from httpx import AsyncClient
 
 logger = logging.getLogger(__name__)
 
+_PARSE_ERRORS = (AttributeError, IndexError, TypeError, ValueError)
+
+
+class TouchlineError(Exception):
+	"""Base exception for all pytouchline errors."""
+
+
+class TouchlineConnectionError(TouchlineError):
+	"""The Touchline controller could not be reached."""
+
+
+class TouchlineTimeoutError(TouchlineConnectionError):
+	"""The request to the Touchline controller timed out."""
+
+
+class TouchlineHTTPError(TouchlineError):
+	"""The Touchline controller responded with a non-success HTTP status."""
+
+	def __init__(self, message: str, status_code: int):
+		super().__init__(f"{message} (HTTP {status_code})")
+		self.status_code = status_code
+
+
+class TouchlineResponseError(TouchlineError):
+	"""The Touchline controller returned an empty or unparseable response."""
+
 
 class PyTouchline(object):
 	"""
@@ -20,12 +48,15 @@ class PyTouchline(object):
 			id (int): The ID of the sensor.
 			url (str): The URL of the heat pump controller.
 			timeout (float): HTTP request timeout in seconds (default: 10.0).
+			client (httpx.AsyncClient | None): Optional shared client. It is not
+				closed by this class. When omitted, a new client is created per request.
 	"""
 
-	def __init__(self, id=0, url="", timeout=10.0):
+	def __init__(self, id=0, url="", timeout=10.0, client: AsyncClient | None = None):
 		self._id = id
 		self._url = url
 		self._timeout = timeout
+		self._client = client
 		self._temp_scale = 100
 		self._header = {"Content-Type": "text/xml"}
 		self._read_path = "/cgi-bin/ILRReadValues.cgi"
@@ -59,15 +90,35 @@ class PyTouchline(object):
 	def get_async_client(self) -> AsyncClient:
 		return httpx.AsyncClient(verify=False, timeout=self._timeout)
 
+	@asynccontextmanager
+	async def _async_client(self) -> AsyncIterator[AsyncClient]:
+		if self._client is not None:
+			yield self._client
+			return
+		async with self.get_async_client() as client:
+			yield client
+
+	async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
+		try:
+			async with self._async_client() as client:
+				return await client.request(
+					method=method, url=url, timeout=self._timeout, **kwargs
+				)
+		except httpx.TimeoutException as e:
+			raise TouchlineTimeoutError(
+				f"Touchline controller timeout after {self._timeout} seconds at {self._url}: {e}") from e
+		except httpx.RequestError as e:
+			raise TouchlineConnectionError(f"Network error connecting to Touchline controller at {self._url}: {e}") from e
+
 	async def get_number_of_devices_async(self) -> int:
 		number_of_devices_items = []
 		number_of_devices_items.append("<i><n>totalNumberOfDevices</n></i>")
 		request = self._get_touchline_request(number_of_devices_items)
 		response = await self._request_and_receive_xml(request)
-		number_of_devcies = self._parse_number_of_devices(response)
-		if number_of_devcies is None:
-			raise Exception("Could not fetch the number of devices")
-		return int(number_of_devcies)
+		try:
+			return int(self._parse_number_of_devices(response))
+		except _PARSE_ERRORS as e:
+			raise TouchlineResponseError("Could not fetch the number of devices") from e
 
 	def get_number_of_devices(self) -> int:
 		return asyncio.run(self.get_number_of_devices_async())
@@ -77,7 +128,10 @@ class PyTouchline(object):
 		hostname_items.append("<i><n>hw.HostName</n></i>")
 		request = self._get_touchline_request(hostname_items)
 		response = await self._request_and_receive_xml(request)
-		return self._parse_number_of_devices(response)
+		try:
+			return self._parse_number_of_devices(response)
+		except _PARSE_ERRORS as e:
+			raise TouchlineResponseError("Could not fetch the hostname") from e
 
 	def get_hostname(self) -> str | None:
 		return asyncio.run(self.get_hostname_async())
@@ -87,7 +141,10 @@ class PyTouchline(object):
 		status_items.append("<i><n>R0.SystemStatus</n></i>")
 		request = self._get_touchline_request(status_items)
 		response = await self._request_and_receive_xml(request)
-		return self._parse_number_of_devices(response)
+		try:
+			return self._parse_number_of_devices(response)
+		except _PARSE_ERRORS as e:
+			raise TouchlineResponseError("Could not fetch the system status") from e
 
 	def get_status(self) -> str | None:
 		return asyncio.run(self.get_status_async())
@@ -97,7 +154,10 @@ class PyTouchline(object):
 		device_items = self._get_touchline_device_item(self._id)
 		request = self._get_touchline_request(device_items)
 		response = await self._request_and_receive_xml(request)
-		return self._parse_device(response)
+		try:
+			return self._parse_device(response)
+		except _PARSE_ERRORS as e:
+			raise TouchlineResponseError(f"Could not parse device {self._id}") from e
 
 	# update the roth touchline device, and parse desc, id etc.
 	def update(self) -> None:
@@ -136,19 +196,18 @@ class PyTouchline(object):
 		return request
 
 	async def write_parameter_async(self, parameter, value):
-		async with self.get_async_client() as client:
-			response = await client.request(
-				url=self._url +
-					self._write_path + "?" +
-					"G" + str(self._parameter["Unique ID"]) +
-					"." + str(parameter) + "=" + str(value),
-				method="GET",
-			)
+		response = await self._request(
+			method="GET",
+			url=self._url +
+				self._write_path + "?" +
+				"G" + str(self._parameter["Unique ID"]) +
+				"." + str(parameter) + "=" + str(value),
+		)
 
 		if not response.is_success:
-			logger.error("Failed to write parameter %s: HTTP %s - %s",
-						 parameter, response.status_code, response.text)
-			raise Exception("Failed to write parameter: Roth Touchline did not respond successfully")
+			raise TouchlineHTTPError(
+				f"Failed to write parameter {parameter}: Roth Touchline did not respond successfully",
+				response.status_code)
 
 		return response.content
 
@@ -158,42 +217,29 @@ class PyTouchline(object):
 	async def _request_and_receive_xml(self, req_key):
 		logger.debug("Requesting URL: %s%s (timeout: %.1fs)", self._url, self._read_path, self._timeout)
 
-		try:
-			async with self.get_async_client() as client:
-				response = await client.request(
-					url=self._url + self._read_path,
-					method="POST",
-					data=req_key,
-					headers=self._header
-				)
-		except httpx.TimeoutException as e:
-			logger.error("Timeout (%.1fs) while connecting to Touchline controller at %s: %s",
-						 self._timeout, self._url, str(e))
-			raise Exception(f"Touchline controller timeout after {self._timeout} seconds: {e}") from e
-		except httpx.RequestError as e:
-			logger.error("Network error while connecting to Touchline controller at %s: %s", self._url, str(e))
-			raise Exception(f"Network error connecting to Touchline controller: {e}") from e
+		response = await self._request(
+			method="POST",
+			url=self._url + self._read_path,
+			content=req_key,
+			headers=self._header,
+		)
 
 		logger.debug("Response status: %s, content length: %d bytes",
 					 response.status_code, len(response.content) if response.content else 0)
 
 		if not response.is_success:
-			logger.error("Failed to read from Touchline: HTTP %s - %s",
-						 response.status_code, response.text)
-			raise Exception("Roth Touchline did not respond successfully")
+			raise TouchlineHTTPError("Roth Touchline did not respond successfully", response.status_code)
 
 		content = response.content
 		if not content or len(content) == 0:
-			logger.error("Received empty response from Touchline controller at %s", self._url)
-			raise Exception("Touchline controller returned empty response")
+			raise TouchlineResponseError("Touchline controller returned empty response")
 
 		try:
 			enc = chardet.detect(content)['encoding']
 			return ET.XML(content, parser=ET.XMLParser(encoding=enc))
 		except ET.ParseError as e:
-			logger.error("Failed to parse XML response from Touchline: %s. Content: %s",
-						 str(e), content[:200])  # Log first 200 bytes
-			raise Exception(f"Invalid XML response from Touchline controller: {e}")
+			# The response is not included as it can contain the controller password
+			raise TouchlineResponseError(f"Invalid XML response from Touchline controller: {e}") from e
 
 	def _parse_number_of_devices(self, response):
 		item_list = response.find('item_list')

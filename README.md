@@ -92,6 +92,43 @@ if __name__ == "__main__":
 	asyncio.run(main())
 ```
 
+### Sharing an HTTP client
+
+By default a new `httpx.AsyncClient` is created for every request. To reuse an
+existing client, pass it to the constructor. The library never closes a client
+it was given, and the `timeout` is still applied per request.
+
+```python
+async with httpx.AsyncClient() as client:
+	py_touchline = PyTouchline(url=URL, client=client)
+	numberOfDevices = await py_touchline.get_number_of_devices_async()
+```
+
+### Error handling
+
+All errors raised by the library derive from `TouchlineError`:
+
+| Exception | Raised when |
+|-----------|-------------|
+| `TouchlineConnectionError` | The controller cannot be reached |
+| `TouchlineTimeoutError` | A request times out (subclass of `TouchlineConnectionError`) |
+| `TouchlineHTTPError` | The controller responds with a non-success HTTP status (available as `status_code`) |
+| `TouchlineResponseError` | The controller returns an empty, invalid or unexpected response |
+
+The library does not log errors it raises; logging them is left to the caller.
+Previous versions raised plain `Exception`; the new exceptions still derive from it.
+
+```python
+from pytouchline_extended import PyTouchline, TouchlineConnectionError, TouchlineError
+
+try:
+	await py_touchline.update_async()
+except TouchlineConnectionError:
+	print("Controller unreachable")
+except TouchlineError:
+	print("Unexpected response from controller")
+```
+
 ## Contributing
 
 Contributions to `pytouchline_extended` are welcome! You are welcome to create issues or pull requests.
