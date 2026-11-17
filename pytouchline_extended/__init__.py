@@ -3,13 +3,24 @@ import logging
 import xml.etree.ElementTree as ET
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
-import cchardet as chardet
+import cchardet as chardet  # type: ignore[import-untyped]
 import httpx
 
 __author__ = 'brondum'
 
 from httpx import AsyncClient
+
+__all__ = [
+	"Parameter",
+	"PyTouchline",
+	"TouchlineConnectionError",
+	"TouchlineError",
+	"TouchlineHTTPError",
+	"TouchlineResponseError",
+	"TouchlineTimeoutError",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +42,7 @@ class TouchlineTimeoutError(TouchlineConnectionError):
 class TouchlineHTTPError(TouchlineError):
 	"""The Touchline controller responded with a non-success HTTP status."""
 
-	def __init__(self, message: str, status_code: int):
+	def __init__(self, message: str, status_code: int) -> None:
 		super().__init__(f"{message} (HTTP {status_code})")
 		self.status_code = status_code
 
@@ -52,7 +63,13 @@ class PyTouchline(object):
 				closed by this class. When omitted, a new client is created per request.
 	"""
 
-	def __init__(self, id=0, url="", timeout=10.0, client: AsyncClient | None = None):
+	def __init__(
+		self,
+		id: int = 0,
+		url: str = "",
+		timeout: float = 10.0,
+		client: AsyncClient | None = None,
+	) -> None:
 		self._id = id
 		self._url = url
 		self._timeout = timeout
@@ -62,6 +79,7 @@ class PyTouchline(object):
 		self._read_path = "/cgi-bin/ILRReadValues.cgi"
 		self._write_path = "/cgi-bin/writeVal.cgi"
 		self._parameter: dict[str, str] = {}
+		self.devices: list[Any] = []
 		self._xml_element_list: list[Parameter] = []
 		self._xml_element_list.append(
 			Parameter(name="name", desc="Name", type=Parameter.G))
@@ -98,7 +116,7 @@ class PyTouchline(object):
 		async with self.get_async_client() as client:
 			yield client
 
-	async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
+	async def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
 		try:
 			async with self._async_client() as client:
 				return await client.request(
@@ -116,7 +134,10 @@ class PyTouchline(object):
 		request = self._get_touchline_request(number_of_devices_items)
 		response = await self._request_and_receive_xml(request)
 		try:
-			return int(self._parse_number_of_devices(response))
+			raw_count = self._parse_number_of_devices(response)
+			if raw_count is None:
+				raise ValueError("Missing number of devices")
+			return int(raw_count)
 		except _PARSE_ERRORS as e:
 			raise TouchlineResponseError("Could not fetch the number of devices") from e
 
@@ -163,9 +184,11 @@ class PyTouchline(object):
 	def update(self) -> None:
 		return asyncio.run(self.update_async())
 
-	def _parse_device(self, response):
+	def _parse_device(self, response: ET.Element) -> None:
 		self.devices = []
 		item_list = response.find('item_list')
+		if item_list is None:
+			raise ValueError("Missing item_list")
 		for item in item_list.iterfind("i"):
 			list_iterator = 0
 			device_list = list(item)
@@ -177,11 +200,14 @@ class PyTouchline(object):
 					self._parameter[parameter.get_desc()] = str(
 						device_list[list_iterator + 1].text)
 					if list_iterator == 0:
-						unique_id = device_list[list_iterator].text.split(".")[0].split("G")[1]
+						tag_text = device_list[list_iterator].text
+						if tag_text is None:
+							raise ValueError("Missing device tag text")
+						unique_id = tag_text.split(".")[0].split("G")[1]
 						self._parameter["Unique ID"] = unique_id
 				list_iterator += 2
 
-	def _get_touchline_request(self, items):
+	def _get_touchline_request(self, items: list[str]) -> str:
 		request = "<body>"
 		request += "<version>1.0</version>"
 		request += "<client>IMaster6_02_00</client>"
@@ -195,7 +221,7 @@ class PyTouchline(object):
 		request += "</body>"
 		return request
 
-	async def write_parameter_async(self, parameter, value):
+	async def write_parameter_async(self, parameter: str, value: str | int | float) -> bytes:
 		response = await self._request(
 			method="GET",
 			url=self._url +
@@ -211,10 +237,10 @@ class PyTouchline(object):
 
 		return response.content
 
-	def write_parameter(self, parameter, value):
+	def write_parameter(self, parameter: str, value: str | int | float) -> bytes:
 		return asyncio.run(self.write_parameter_async(parameter, value))
 
-	async def _request_and_receive_xml(self, req_key):
+	async def _request_and_receive_xml(self, req_key: str) -> ET.Element:
 		logger.debug("Requesting URL: %s%s (timeout: %.1fs)", self._url, self._read_path, self._timeout)
 
 		response = await self._request(
@@ -235,18 +261,25 @@ class PyTouchline(object):
 			raise TouchlineResponseError("Touchline controller returned empty response")
 
 		try:
-			enc = chardet.detect(content)['encoding']
+			enc: str | None = chardet.detect(content)['encoding']
 			return ET.XML(content, parser=ET.XMLParser(encoding=enc))
 		except ET.ParseError as e:
 			# The response is not included as it can contain the controller password
 			raise TouchlineResponseError(f"Invalid XML response from Touchline controller: {e}") from e
 
-	def _parse_number_of_devices(self, response):
+	def _parse_number_of_devices(self, response: ET.Element) -> str | None:
 		item_list = response.find('item_list')
+		if item_list is None:
+			raise ValueError("Missing item_list")
 		item = item_list.find('i')
-		return item.find('v').text
+		if item is None:
+			raise ValueError("Missing item")
+		value = item.find('v')
+		if value is None:
+			raise ValueError("Missing value")
+		return value.text
 
-	def _get_touchline_device_item(self, id):
+	def _get_touchline_device_item(self, id: int) -> list[str]:
 		items = []
 		parameters = ""
 		for parameter in self._xml_element_list:
@@ -364,7 +397,7 @@ class Parameter(object):
 	G = 1
 	R = 2
 
-	def __init__(self, name: str, desc: str, type: int):
+	def __init__(self, name: str, desc: str, type: int) -> None:
 		self._name = name
 		self._desc = desc
 		self._type = type

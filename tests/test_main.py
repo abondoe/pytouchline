@@ -547,3 +547,13 @@ async def test_errors_are_raised_not_logged(
     assert not [record for record in caplog.records if record.levelno > logging.DEBUG]
     assert "secret" not in caplog.text
     assert "secret" not in str(exc_info.value)
+
+
+def test_py_typed_marker_exists():
+    """Test that PEP 561 py.typed marker is shipped in the package"""
+    from pathlib import Path
+    import pytouchline_extended
+
+    py_typed = Path(pytouchline_extended.__file__).resolve().parent / "py.typed"
+    assert py_typed.is_file()
+

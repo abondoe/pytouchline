@@ -19,7 +19,9 @@ setup(
 	'Programming Language :: Python :: 3.12',
 	'Programming Language :: Python :: 3.13',
   'Programming Language :: Python :: 3.14',
+	'Typing :: Typed',
   ],
+  package_data={'pytouchline_extended': ['py.typed']},
   python_requires='>=3.10',
   install_requires=['httpx', 'faust-cchardet']
 )
